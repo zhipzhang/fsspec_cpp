@@ -1,0 +1,40 @@
+# Build
+build/
+dist/
+*.egg-info/
+*.so
+*.dylib
+*.dll
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# CMake
+cmake-build-*/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Python
+venv/
+.env/
+*.venv
+Pipfile.lock
+poetry.lock
+
+# Test artifacts
+tmp/
+temp/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db

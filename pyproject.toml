@@ -1,0 +1,29 @@
+[build-system]
+requires = ["scikit-build-core", "nanobind"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "fsspec-cpp"
+version = "0.1.0"
+description = "C++ bindings for fsspec using nanobind"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.8"
+authors = [
+    {name = "zhipzhang"},
+]
+dependencies = [
+    "fsspec>=2023.0.0",
+    "nanobind>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "s3fs",
+    "gcsfs",
+]
+
+[tool.scikit-build]
+minimum-version = "0.4"
+build-dir = "build/{wheel_tag}"
