@@ -27,6 +27,21 @@ struct fsspec_fs_s {
     PyObject* py_fs;
 };
 
+// 零拷贝 Buffer 结构体
+struct fsspec_buffer_s {
+    PyObject* obj;       // 持有的 Python 对象（增加引用计数）
+    void* ptr;           // 数据指针
+    size_t size;         // 数据大小
+    bool is_memoryview;  // 是否是 memoryview（需要特殊释放）
+};
+
+// 前向声明（零拷贝 API）
+fsspec_buffer_t* fsspec_file_read_buffer(fsspec_file_t* file, size_t size);
+size_t fsspec_file_write_buffer(fsspec_file_t* file, fsspec_buffer_t* buffer);
+fsspec_buffer_t* fsspec_buffer_from_memory(const void* ptr, size_t size);
+int fsspec_buffer_get_info(fsspec_buffer_t* buffer, const void** ptr, size_t* size);
+void fsspec_buffer_release(fsspec_buffer_t* buffer);
+
 // ============ 初始化 ============
 
 int fsspec_init(void) {
@@ -260,42 +275,32 @@ int fsspec_file_close(fsspec_file_t* file) {
 size_t fsspec_file_read(fsspec_file_t* file, void* buffer, size_t size) {
     if (!file || file->closed) return 0;
 
-    PyObject* result = PyObject_CallMethod(file->py_file, "read", "n", (Py_ssize_t)size);
-    if (!result) {
-        PyErr_Print();
+    // 使用零拷贝 Buffer API，然后拷贝到用户 buffer
+    fsspec_buffer_t* buf = fsspec_file_read_buffer(file, size);
+    if (!buf) return 0;
+
+    const void* ptr;
+    size_t len;
+    if (fsspec_buffer_get_info(buf, &ptr, &len) != 0) {
+        fsspec_buffer_release(buf);
         return 0;
     }
 
-    Py_ssize_t len = 0;
-    char* data = NULL;
-
-    // 二进制模式返回 bytes
-    if (PyBytes_AsStringAndSize(result, &data, &len) != 0) {
-        Py_DECREF(result);
-        return 0;
-    }
-
-    memcpy(buffer, data, len);
-    Py_DECREF(result);
-    return (size_t)len;
+    // 拷贝到用户 buffer（这是必要的，因为用户提供了目标内存）
+    memcpy(buffer, ptr, len);
+    fsspec_buffer_release(buf);
+    return len;
 }
 
 size_t fsspec_file_write(fsspec_file_t* file, const void* buffer, size_t size) {
     if (!file || file->closed) return 0;
 
-    PyObject* bytes = PyBytes_FromStringAndSize((const char*)buffer, (Py_ssize_t)size);
-    if (!bytes) return 0;
+    // 使用零拷贝 Buffer API
+    fsspec_buffer_t* buf = fsspec_buffer_from_memory(buffer, size);
+    if (!buf) return 0;
 
-    PyObject* result = PyObject_CallMethod(file->py_file, "write", "O", bytes);
-    Py_DECREF(bytes);
-
-    if (!result) {
-        PyErr_Print();
-        return 0;
-    }
-
-    size_t written = (size_t)PyLong_AsSize_t(result);
-    Py_DECREF(result);
+    size_t written = fsspec_file_write_buffer(file, buf);
+    fsspec_buffer_release(buf);
     return written;
 }
 
@@ -469,13 +474,6 @@ FILE* fsspec_fopen(const char* url, const char* mode) {
 #endif
 
 // ============ 零拷贝 Buffer API ============
-
-struct fsspec_buffer_s {
-    PyObject* obj;       // 持有的 Python 对象（增加引用计数）
-    void* ptr;           // 数据指针
-    size_t size;         // 数据大小
-    bool is_memoryview;  // 是否是 memoryview（需要特殊释放）
-};
 
 fsspec_buffer_t* fsspec_file_read_buffer(fsspec_file_t* file, size_t size) {
     if (!file || file->closed) return NULL;
