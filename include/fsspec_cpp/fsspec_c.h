@@ -81,6 +81,39 @@ int fsspec_file_flush(fsspec_file_t* file);
 // 检查是否已到文件末尾
 bool fsspec_file_eof(fsspec_file_t* file);
 
+// ============ 文件信息 (stat) ============
+
+typedef struct {
+    char path[1024];      // 完整路径
+    char name[256];       // 文件名
+    int64_t size;         // 文件大小（字节）
+    bool is_dir;          // 是否是目录
+    double mtime;         // 修改时间（Unix时间戳，秒）
+    char protocol[64];    // 协议（file, s3, gcs等）
+} fsspec_stat_t;
+
+// 获取文件/目录信息
+// 返回值: 0 成功, -1 失败
+int fsspec_fs_stat(fsspec_fs_t* fs, const char* path, fsspec_stat_t* st);
+
+// 便捷函数：直接通过 URL stat
+int fsspec_stat(const char* url, fsspec_stat_t* st);
+
+// ============ POSIX stat 兼容 (Linux) ============
+
+#ifdef __linux__
+#include <sys/stat.h>
+
+// 将 fsspec_stat_t 填充到 POSIX struct stat
+// 注意：部分字段（inode, nlink, blksize等）会被设为0或默认值
+// 因为云存储不一定支持这些信息
+int fsspec_stat_to_posix(const fsspec_stat_t* fst, struct stat* st);
+
+// 直接通过 URL 获取 POSIX stat（Linux 专用）
+// 这是 fsspec_stat + fsspec_stat_to_posix 的便捷组合
+int fsspec_posix_stat(const char* url, struct stat* st);
+#endif
+
 // ============ GNU/Linux FILE* 包装 ============
 
 #ifdef __linux__

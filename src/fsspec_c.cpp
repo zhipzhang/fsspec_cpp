@@ -7,6 +7,11 @@
 #include <cstring>
 #include <string>
 
+#ifdef __linux__
+#include <unistd.h>
+#include <sys/stat.h>
+#endif
+
 namespace nb = nanobind;
 
 // 线程局部存储错误信息
@@ -238,3 +243,106 @@ bool fsspec_file_eof(fsspec_file_t* file) {
         return true;
     }
 }
+
+// ============ 文件信息 (stat) ============
+
+int fsspec_fs_stat(fsspec_fs_t* fs, const char* path, fsspec_stat_t* st) {
+    if (!fs || !path || !st) {
+        set_error("Invalid arguments");
+        return -1;
+    }
+    try {
+        nb::gil_scoped_acquire acquire;
+        auto info = fs->cpp_fs->info(path);
+        
+        strncpy(st->path, info.path.c_str(), sizeof(st->path) - 1);
+        st->path[sizeof(st->path) - 1] = '\0';
+        
+        strncpy(st->name, info.name.c_str(), sizeof(st->name) - 1);
+        st->name[sizeof(st->name) - 1] = '\0';
+        
+        st->size = info.size;
+        st->is_dir = info.is_dir;
+        st->mtime = info.mtime;
+        
+        strncpy(st->protocol, info.protocol.c_str(), sizeof(st->protocol) - 1);
+        st->protocol[sizeof(st->protocol) - 1] = '\0';
+        
+        return 0;
+    } catch (...) {
+        set_exception_error();
+        return -1;
+    }
+}
+
+int fsspec_stat(const char* url, fsspec_stat_t* st) {
+    if (!url || !st) {
+        set_error("Invalid arguments");
+        return -1;
+    }
+    fsspec_fs_t* fs = fsspec_fs_from_url(url);
+    if (!fs) return -1;
+    
+    int result = fsspec_fs_stat(fs, url, st);
+    fsspec_fs_free(fs);
+    return result;
+}
+
+// ============ POSIX stat 兼容 (Linux) ============
+
+#ifdef __linux__
+
+int fsspec_stat_to_posix(const fsspec_stat_t* fst, struct stat* st) {
+    if (!fst || !st) {
+        set_error("Invalid arguments");
+        return -1;
+    }
+    
+    memset(st, 0, sizeof(*st));
+    
+    // 文件大小
+    st->st_size = fst->size;
+    
+    // 文件类型和基础权限
+    if (fst->is_dir) {
+        st->st_mode = S_IFDIR | 0755;
+    } else {
+        st->st_mode = S_IFREG | 0644;
+    }
+    
+    // 修改时间
+    st->st_mtime = (time_t)fst->mtime;
+    st->st_atime = st->st_mtime;
+    st->st_ctime = st->st_mtime;
+    
+    // 以下字段 fsspec 无法提供，设为默认值
+    st->st_ino = 0;        // inode 号
+    st->st_nlink = 1;      // 硬链接数
+    st->st_uid = getuid(); // 当前用户
+    st->st_gid = getgid(); // 当前组
+    st->st_blksize = 4096; // 典型块大小
+    st->st_blocks = (fst->size + 511) / 512; // 512字节块数
+    
+    // 设备号（对云存储无意义）
+    st->st_dev = 0;
+    st->st_rdev = 0;
+    
+    return 0;
+}
+
+int fsspec_posix_stat(const char* url, struct stat* st) {
+    if (!url || !st) {
+        set_error("Invalid arguments");
+        return -1;
+    }
+    
+    fsspec_stat_t fst;
+    if (fsspec_stat(url, &fst) != 0) {
+        return -1;
+    }
+    
+    return fsspec_stat_to_posix(&fst, st);
+}
+
+#endif // __linux__
+
