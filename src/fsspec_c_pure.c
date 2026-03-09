@@ -411,7 +411,7 @@ FILE* fsspec_fopen(const char* url, const char* mode) {
         return NULL;
     }
     
-    FILE* fp = fsspec_file_to_fileptr(file, mode ? mode : "r");
+    FILE* fp = fsspec_file_to_fileptr(file, mode ? mode : "rb");
     if (!fp) {
         fsspec_file_close(file);
     }
