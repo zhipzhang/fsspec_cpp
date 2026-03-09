@@ -9,6 +9,15 @@ namespace fsspec {
 class PyFileSystem;
 class PyFile;
 
+// 辅助函数：从 dict 获取值，带默认值
+template<typename T>
+T dict_get(nb::dict d, const char* key, T default_val) {
+    if (d.contains(key)) {
+        return nb::cast<T>(d[key]);
+    }
+    return default_val;
+}
+
 // Python 文件系统包装
 class PyFileSystem : public FileSystem {
 private:
@@ -115,8 +124,8 @@ std::vector<FileInfo> PyFileSystem::ls(const std::string& path) {
         if (nb::isinstance<nb::dict>(item)) {
             nb::dict d = nb::cast<nb::dict>(item);
             info.name = nb::cast<std::string>(d["name"]);
-            info.size = nb::cast<int64_t>(d.value_or("size", 0));
-            info.is_dir = nb::cast<bool>(d.value_or("type", "file") == nb::str("directory"));
+            info.size = dict_get<int64_t>(d, "size", 0);
+            info.is_dir = dict_get<std::string>(d, "type", "file") == "directory";
         } else {
             info.name = nb::cast<std::string>(item);
         }
@@ -137,12 +146,14 @@ void PyFileSystem::rmdir(const std::string& path) {
 
 FileInfo PyFileSystem::info(const std::string& path) {
     nb::gil_scoped_acquire acquire;
-    auto d = fs_obj_.attr("info")(path);
+    nb::dict d = nb::cast<nb::dict>(fs_obj_.attr("info")(path));
     FileInfo info;
     info.name = nb::cast<std::string>(d["name"]);
-    info.size = nb::cast<int64_t>(d.value_or("size", 0));
-    info.is_dir = nb::cast<bool>(d.value_or("type", "file") == nb::str("directory"));
-    info.mtime = nb::cast<double>(d.value_or("mtime", 0.0));
+    info.path = info.name;
+    info.size = dict_get<int64_t>(d, "size", 0);
+    info.is_dir = dict_get<std::string>(d, "type", "file") == "directory";
+    info.mtime = dict_get<double>(d, "mtime", 0.0);
+    info.protocol = dict_get<std::string>(d, "protocol", "");
     return info;
 }
 

@@ -57,10 +57,24 @@ NB_MODULE(_fsspec_cpp, m) {
         .def("info", &FileSystem::info)
         .def("glob", &FileSystem::glob);
     
-    // 便捷函数
-    m.def("filesystem_from_url", &filesystem_from_url);
-    m.def("open", &open, nb::arg("url"), nb::arg("mode") = "r");
-    m.def("exists", &exists);
-    m.def("remove", &remove);
-    m.def("ls", &ls);
+    // 便捷函数 - 使用 lambda 避免函数指针歧义
+    m.def("filesystem_from_url", [](const std::string& url) {
+        return filesystem_from_url(url);
+    });
+    
+    m.def("open", [](const std::string& url, const std::string& mode) {
+        return fsspec::open(url, mode);
+    }, nb::arg("url"), nb::arg("mode") = "r");
+    
+    m.def("exists", [](const std::string& url) {
+        return fsspec::exists(url);
+    });
+    
+    m.def("remove", [](const std::string& url) {
+        fsspec::remove(url);
+    });
+    
+    m.def("ls", [](const std::string& url) {
+        return fsspec::ls(url);
+    });
 }

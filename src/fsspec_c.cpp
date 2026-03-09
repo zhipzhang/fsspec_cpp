@@ -49,9 +49,9 @@ int fsspec_init(void) {
         if (!Py_IsInitialized()) {
             Py_Initialize();
         }
-        // 预热 fsspec 模块
-        nb::gil_scoped_acquire acquire;
-        fsspec::python::fsspec_module();
+        // 预热 Python 导入系统（但不导入 nanobind 模块）
+        PyObject* sys = PyImport_ImportModule("sys");
+        if (sys) Py_DECREF(sys);
         return 0;
     } catch (...) {
         set_exception_error();
