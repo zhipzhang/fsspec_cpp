@@ -123,6 +123,71 @@ int main(int argc, char** argv) {
     printf("✓ FILE* closed\n");
 #endif
 
+    // 测试 6: 零拷贝 Buffer API
+    printf("\n=== Zero-copy Buffer API test ===\n");
+    const char* buffer_test_url = "file:///tmp/fsspec_buffer_test.txt";
+    const char* test_data = "Zero-copy buffer test data!";
+
+    // 写入测试文件
+    f = fsspec_open(buffer_test_url, "w");
+    if (!f) {
+        fprintf(stderr, "Failed to open buffer test file for write\n");
+        return 1;
+    }
+    written = fsspec_file_write(f, test_data, strlen(test_data));
+    printf("✓ Written %zu bytes for buffer test\n", written);
+    fsspec_file_close(f);
+
+    // 使用零拷贝 API 读取
+    f = fsspec_open(buffer_test_url, "r");
+    if (!f) {
+        fprintf(stderr, "Failed to open buffer test file for read\n");
+        return 1;
+    }
+
+    fsspec_buffer_t* buffer = fsspec_file_read_buffer(f, 1024);
+    if (buffer) {
+        const void* ptr;
+        size_t size;
+        if (fsspec_buffer_get_info(buffer, &ptr, &size) == 0) {
+            printf("✓ Zero-copy read succeeded\n");
+            printf("  Buffer size: %zu bytes\n", size);
+            printf("  Content: %.*s\n", (int)size, (char*)ptr);
+            if (size == strlen(test_data) && memcmp(ptr, test_data, size) == 0) {
+                printf("✓ Data matches!\n");
+            } else {
+                fprintf(stderr, "✗ Data mismatch!\n");
+            }
+        }
+        fsspec_buffer_release(buffer);
+    } else {
+        fprintf(stderr, "✗ Zero-copy read failed: %s\n", fsspec_last_error());
+    }
+    fsspec_file_close(f);
+
+    // 测试零拷贝写入
+    f = fsspec_open(buffer_test_url, "w");
+    if (f) {
+        fsspec_buffer_t* write_buf = fsspec_buffer_from_memory(test_data, strlen(test_data));
+        if (write_buf) {
+            written = fsspec_file_write_buffer(f, write_buf);
+            printf("✓ Zero-copy write: %zu bytes\n", written);
+            fsspec_buffer_release(write_buf);
+        }
+        fsspec_file_close(f);
+
+        // 验证写入的数据
+        f = fsspec_open(buffer_test_url, "r");
+        if (f) {
+            char verify_buf[256];
+            size_t n = fsspec_file_read(f, verify_buf, sizeof(verify_buf));
+            if (n == strlen(test_data) && memcmp(verify_buf, test_data, n) == 0) {
+                printf("✓ Zero-copy write data verified!\n");
+            }
+            fsspec_file_close(f);
+        }
+    }
+
     // 清理
     fsspec_cleanup();
     printf("\n=== All tests passed! ===\n");

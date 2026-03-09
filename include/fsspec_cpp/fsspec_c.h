@@ -89,6 +89,35 @@ int fsspec_file_flush(fsspec_file_t* file);
 // 检查是否已到文件末尾
 bool fsspec_file_eof(fsspec_file_t* file);
 
+// ============ 零拷贝 Buffer API (Python 3.10+) ============
+
+// 零拷贝缓冲区句柄
+typedef struct fsspec_buffer_s fsspec_buffer_t;
+
+// 读取数据到零拷贝缓冲区
+// 返回缓冲区对象，用完必须调用 fsspec_buffer_release() 释放
+// 失败返回 NULL，错误信息通过 fsspec_last_error() 获取
+fsspec_buffer_t* fsspec_file_read_buffer(fsspec_file_t* file, size_t size);
+
+// 写入零拷贝缓冲区到文件
+// buffer: 通过 fsspec_buffer_t 或任何支持 Python buffer protocol 的对象
+// 返回实际写入的字节数
+size_t fsspec_file_write_buffer(fsspec_file_t* file, fsspec_buffer_t* buffer);
+
+// 获取缓冲区指针和大小
+// ptr: 输出参数，接收数据指针
+// size: 输出参数，接收数据大小
+// 返回 0 成功, -1 失败
+int fsspec_buffer_get_info(fsspec_buffer_t* buffer, const void** ptr, size_t* size);
+
+// 释放缓冲区
+void fsspec_buffer_release(fsspec_buffer_t* buffer);
+
+// 从用户内存创建零拷贝缓冲区（用于写入）
+// 不拷贝数据，只是包装用户指针
+// 返回缓冲区对象，用完必须调用 fsspec_buffer_release() 释放
+fsspec_buffer_t* fsspec_buffer_from_memory(const void* ptr, size_t size);
+
 // ============ 文件信息 (stat) ============
 
 typedef struct {

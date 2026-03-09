@@ -467,3 +467,101 @@ FILE* fsspec_fopen(const char* url, const char* mode) {
 }
 
 #endif
+
+// ============ 零拷贝 Buffer API ============
+
+struct fsspec_buffer_s {
+    PyObject* obj;       // 持有的 Python 对象（增加引用计数）
+    void* ptr;           // 数据指针
+    size_t size;         // 数据大小
+    bool is_memoryview;  // 是否是 memoryview（需要特殊释放）
+};
+
+fsspec_buffer_t* fsspec_file_read_buffer(fsspec_file_t* file, size_t size) {
+    if (!file || file->closed) return NULL;
+
+    // 读取数据
+    PyObject* result = PyObject_CallMethod(file->py_file, "read", "n", (Py_ssize_t)size);
+    if (!result) {
+        PyErr_Print();
+        set_error("read() failed");
+        return NULL;
+    }
+
+    // 创建 memoryview（零拷贝视图）
+    PyObject* mv = PyMemoryView_FromObject(result);
+    if (!mv) {
+        Py_DECREF(result);
+        PyErr_Print();
+        set_error("Failed to create memoryview");
+        return NULL;
+    }
+
+    // 获取 buffer 信息
+    Py_buffer* buf = PyMemoryView_GET_BUFFER(mv);
+    if (!buf) {
+        Py_DECREF(mv);
+        Py_DECREF(result);
+        set_error("Failed to get buffer info");
+        return NULL;
+    }
+
+    fsspec_buffer_t* buffer = malloc(sizeof(fsspec_buffer_t));
+    buffer->obj = result;          // 持有原始 bytes 对象
+    buffer->ptr = buf->buf;        // 直接指向内存
+    buffer->size = buf->len;       // 数据大小
+    buffer->is_memoryview = true;  // 标记类型
+
+    Py_DECREF(mv);  // memoryview 可以释放了，但底层 buffer 还在
+    return buffer;
+}
+
+size_t fsspec_file_write_buffer(fsspec_file_t* file, fsspec_buffer_t* buffer) {
+    if (!file || file->closed || !buffer) return 0;
+
+    // 创建 memoryview 包装（零拷贝）
+    PyObject* mv = PyMemoryView_FromMemory((char*)buffer->ptr, buffer->size, PyBUF_READ);
+    if (!mv) {
+        PyErr_Print();
+        return 0;
+    }
+
+    PyObject* result = PyObject_CallMethod(file->py_file, "write", "O", mv);
+    Py_DECREF(mv);
+
+    if (!result) {
+        PyErr_Print();
+        return 0;
+    }
+
+    size_t written = (size_t)PyLong_AsSize_t(result);
+    Py_DECREF(result);
+    return written;
+}
+
+int fsspec_buffer_get_info(fsspec_buffer_t* buffer, const void** ptr, size_t* size) {
+    if (!buffer) return -1;
+    if (ptr) *ptr = buffer->ptr;
+    if (size) *size = buffer->size;
+    return 0;
+}
+
+void fsspec_buffer_release(fsspec_buffer_t* buffer) {
+    if (!buffer) return;
+    if (buffer->obj) {
+        Py_DECREF(buffer->obj);  // 释放持有的 Python 对象
+    }
+    free(buffer);
+}
+
+fsspec_buffer_t* fsspec_buffer_from_memory(const void* ptr, size_t size) {
+    if (!ptr || size == 0) return NULL;
+
+    fsspec_buffer_t* buffer = malloc(sizeof(fsspec_buffer_t));
+    buffer->obj = NULL;        // 不持有 Python 对象
+    buffer->ptr = (void*)ptr;  // 用户内存
+    buffer->size = size;
+    buffer->is_memoryview = false;  // 标记类型
+
+    return buffer;
+}
