@@ -148,12 +148,13 @@ int fsspec_fs_rename(fsspec_fs_t* fs, const char* src, const char* dst) {
 fsspec_file_t* fsspec_fs_open(fsspec_fs_t* fs, const char* path, fsspec_mode_t mode) {
     if (!fs) return NULL;
     
-    const char* mode_str = "r";
+    // 始终使用二进制模式
+    const char* mode_str = "rb";
     switch(mode) {
-        case FSSPEC_MODE_READ: mode_str = "r"; break;
-        case FSSPEC_MODE_WRITE: mode_str = "w"; break;
-        case FSSPEC_MODE_APPEND: mode_str = "a"; break;
-        case FSSPEC_MODE_READWRITE: mode_str = "r+"; break;
+        case FSSPEC_MODE_READ: mode_str = "rb"; break;
+        case FSSPEC_MODE_WRITE: mode_str = "wb"; break;
+        case FSSPEC_MODE_APPEND: mode_str = "ab"; break;
+        case FSSPEC_MODE_READWRITE: mode_str = "r+b"; break;
     }
     
     PyObject* result = PyObject_CallMethod(fs->py_fs, "open", "ss", path, mode_str);
@@ -169,19 +170,24 @@ fsspec_file_t* fsspec_fs_open(fsspec_fs_t* fs, const char* path, fsspec_mode_t m
 }
 
 fsspec_file_t* fsspec_open(const char* url, const char* mode) {
-    // 使用 url_to_fs 获取文件系统，然后打开文件
+    // 解析模式，转换为二进制模式
+    fsspec_mode_t fmode = FSSPEC_MODE_READ;
+    if (mode) {
+        if (strchr(mode, 'w')) fmode = FSSPEC_MODE_WRITE;
+        else if (strchr(mode, 'a')) fmode = FSSPEC_MODE_APPEND;
+        else if (strchr(mode, '+')) fmode = FSSPEC_MODE_READWRITE;
+    }
+    
     fsspec_fs_t* fs = fsspec_fs_from_url(url);
     if (!fs) {
         set_error("Failed to get filesystem from URL");
         return NULL;
     }
     
-    fsspec_file_t* file = fsspec_fs_open(fs, url, 
-        mode && (mode[0] == 'w' || mode[0] == 'a') ? FSSPEC_MODE_WRITE : FSSPEC_MODE_READ);
+    fsspec_file_t* file = fsspec_fs_open(fs, url, fmode);
     
-    // 释放文件系统（文件已经打开，不需要 fs 了）
-    // 注意：这里我们需要保持 fs 活着，因为文件依赖于它
-    // 简化起见，我们先不释放
+    // 注意：文件系统对象需要保持存活，但当前设计没有处理这个问题
+    // 简化起见，保持 fs 存活（内存泄漏，但功能正确）
     
     return file;
 }
@@ -207,22 +213,10 @@ size_t fsspec_file_read(fsspec_file_t* file, void* buffer, size_t size) {
     }
     
     Py_ssize_t len = 0;
-    const char* data = NULL;
+    char* data = NULL;
     
-    if (PyBytes_Check(result)) {
-        // 二进制模式
-        if (PyBytes_AsStringAndSize(result, (char**)&data, &len) != 0) {
-            Py_DECREF(result);
-            return 0;
-        }
-    } else if (PyUnicode_Check(result)) {
-        // 文本模式
-        data = PyUnicode_AsUTF8AndSize(result, &len);
-        if (!data) {
-            Py_DECREF(result);
-            return 0;
-        }
-    } else {
+    // 二进制模式返回 bytes
+    if (PyBytes_AsStringAndSize(result, &data, &len) != 0) {
         Py_DECREF(result);
         return 0;
     }
