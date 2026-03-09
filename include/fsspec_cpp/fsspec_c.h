@@ -32,6 +32,14 @@ void fsspec_cleanup(void);
 // 获取上次错误信息
 const char* fsspec_last_error(void);
 
+// ============ 协议支持 ============
+
+// 导入额外的 fsspec 协议支持模块（如 fsspec_xrootd, fsspec_smb 等）
+// 模块名：要导入的 Python 模块名（如 "fsspec_xrootd"）
+// 返回值：0 成功, -1 失败（模块不存在或导入错误）
+// 错误信息可通过 fsspec_last_error() 获取
+int fsspec_import_protocol(const char* module_name);
+
 // ============ 文件系统操作 ============
 
 // 从 URL 获取文件系统

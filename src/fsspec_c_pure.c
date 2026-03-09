@@ -42,6 +42,51 @@ void fsspec_cleanup(void) {
 
 const char* fsspec_last_error(void) { return g_last_error[0] ? g_last_error : NULL; }
 
+// ============ 协议支持 ============
+
+int fsspec_import_protocol(const char* module_name) {
+    if (!module_name) {
+        set_error("Module name is NULL");
+        return -1;
+    }
+
+    PyObject* module = PyImport_ImportModule(module_name);
+    if (!module) {
+        // 获取 Python 错误信息
+        if (PyErr_Occurred()) {
+            PyObject *ptype, *pvalue, *ptraceback;
+            PyErr_Fetch(&ptype, &pvalue, &ptraceback);
+
+            if (pvalue) {
+                PyObject* str = PyObject_Str(pvalue);
+                if (str) {
+                    const char* msg = PyUnicode_AsUTF8(str);
+                    snprintf(g_last_error, sizeof(g_last_error), "Failed to import '%s': %s",
+                             module_name, msg);
+                    Py_DECREF(str);
+                } else {
+                    snprintf(g_last_error, sizeof(g_last_error),
+                             "Failed to import '%s': unknown error", module_name);
+                }
+            } else {
+                snprintf(g_last_error, sizeof(g_last_error),
+                         "Failed to import '%s': module not found", module_name);
+            }
+
+            Py_XDECREF(ptype);
+            Py_XDECREF(pvalue);
+            Py_XDECREF(ptraceback);
+        } else {
+            snprintf(g_last_error, sizeof(g_last_error), "Failed to import '%s': module not found",
+                     module_name);
+        }
+        return -1;
+    }
+
+    Py_DECREF(module);
+    return 0;
+}
+
 // ============ 内部辅助函数 ============
 
 static PyObject* get_fsspec_core(void) {
