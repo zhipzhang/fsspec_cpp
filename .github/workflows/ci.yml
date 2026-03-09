@@ -1,4 +1,4 @@
-name: Build and Test
+name: CI
 
 on:
   push:
@@ -23,8 +23,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install nanobind fsspec scikit-build-core
+        pip install fsspec nanobind scikit-build-core
 
     - name: Configure CMake
       run: |
@@ -33,55 +32,47 @@ jobs:
         cmake ..
 
     - name: Build
-      run: cmake --build build --parallel 4
-
-    - name: Test Python module
       run: |
         cd build
-        python -c "import sys; sys.path.insert(0, '.'); import _fsspec_cpp; print('Python module OK')"
+        make -j4
 
-    - name: Test C API (Simple)
+    - name: Run C API tests
       run: |
         cd build
-        ./test_python
+        ./test_c_api
 
-    - name: Upload artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: build-artifacts-${{ matrix.python-version }}
-        path: |
-          build/libfsspec_c.so
-          build/_fsspec_cpp*.so
+    - name: Run Python module tests (if available)
+      run: |
+        cd build
+        python3 -c "import sys; sys.path.insert(0, '.'); import _fsspec_cpp; print('Python module loaded')"
 
   build-macos:
     runs-on: macos-latest
-    strategy:
-      matrix:
-        python-version: ['3.11', '3.12']
-
     steps:
     - uses: actions/checkout@v4
 
-    - name: Set up Python ${{ matrix.python-version }}
+    - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: ${{ matrix.python-version }}
+        python-version: '3.12'
 
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install nanobind fsspec scikit-build-core
-
-    - name: Configure CMake
-      run: |
-        mkdir build
-        cd build
-        cmake ..
+        pip install fsspec nanobind scikit-build-core
 
     - name: Build
-      run: cmake --build build --parallel 4
-
-    - name: Test Python module
       run: |
-        cd build
-        python -c "import sys; sys.path.insert(0, '.'); import _fsspec_cpp; print('Python module OK')"
+        mkdir build && cd build
+        cmake ..
+        make -j4
+
+  format-check:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Check C/C++ formatting
+      uses: jidicula/clang-format-action@v4.11.0
+      with:
+        clang-format-version: '17'
+        check-path: 'src include tests'

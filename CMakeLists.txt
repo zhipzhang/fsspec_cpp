@@ -50,7 +50,6 @@ find_library(NANOBIND_LIB nanobind-static PATHS ${NANOBIND_DIR} ${NANOBIND_DIR}/
 if(NANOBIND_LIB)
     target_link_libraries(fsspec_cpp_core PRIVATE ${NANOBIND_LIB})
 else()
-    # 如果没有预编译库，直接使用 nanobind 的目标
     target_link_libraries(fsspec_cpp_core PRIVATE nanobind-static)
 endif()
 
@@ -64,15 +63,14 @@ nanobind_add_module(_fsspec_cpp
 )
 target_link_libraries(_fsspec_cpp PRIVATE fsspec_cpp_core)
 
-# ============ C API 共享库 ============
+# ============ C API 共享库 (纯 C 实现) ============
 add_library(fsspec_c SHARED
-    src/fsspec_c.cpp
-    src/fsspec_fileptr.cpp
+    src/fsspec_c_pure.c
 )
 target_link_libraries(fsspec_c PRIVATE 
-    fsspec_cpp_core
+    ${Python_LIBRARIES}
 )
-target_include_directories(fsspec_c PRIVATE ${NANOBIND_INCLUDE_DIR} ${Python_INCLUDE_DIRS})
+target_include_directories(fsspec_c PRIVATE ${Python_INCLUDE_DIRS})
 set_target_properties(fsspec_c PROPERTIES
     C_STANDARD 11
     C_STANDARD_REQUIRED ON
@@ -84,26 +82,31 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_compile_definitions(fsspec_c PRIVATE _GNU_SOURCE)
 endif()
 
-# ============ C API 测试 ============
+# ============ 测试 ============
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
     enable_testing()
     
+    # C API 测试
     add_executable(test_c_api tests/test_c_api.c)
-    target_link_libraries(test_c_api PRIVATE fsspec_c)
-    # 需要显式链接 Python 库
-    target_link_libraries(test_c_api PRIVATE ${Python_LIBRARIES})
+    target_link_libraries(test_c_api PRIVATE fsspec_c ${Python_LIBRARIES})
     target_include_directories(test_c_api PRIVATE ${Python_INCLUDE_DIRS})
     
+    # 简单 Python 测试
     add_executable(test_simple tests/test_simple.c)
-    target_link_libraries(test_simple PRIVATE fsspec_c)
-    target_link_libraries(test_simple PRIVATE ${Python_LIBRARIES})
+    target_link_libraries(test_simple PRIVATE fsspec_c ${Python_LIBRARIES})
     target_include_directories(test_simple PRIVATE ${Python_INCLUDE_DIRS})
     
-    add_executable(test_python tests/test_python.c)
-    target_link_libraries(test_python PRIVATE ${Python_LIBRARIES})
-    target_include_directories(test_python PRIVATE ${Python_INCLUDE_DIRS})
+    # doctest C++ 测试
+    add_executable(test_cpp_api tests/test_cpp_api.cpp)
+    target_link_libraries(test_cpp_api PRIVATE fsspec_cpp_core ${Python_LIBRARIES})
+    target_include_directories(test_cpp_api PRIVATE 
+        ${CMAKE_SOURCE_DIR}/third_party
+        ${NANOBIND_INCLUDE_DIR}
+        ${Python_INCLUDE_DIRS}
+    )
     
     add_test(NAME c_api_test COMMAND test_c_api)
+    add_test(NAME cpp_api_test COMMAND test_cpp_api)
 endif()
 
 # ============ 安装 ============
