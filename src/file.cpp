@@ -24,4 +24,4 @@ void File::write_all(const std::string& data) {
     }
 }
 
-} // namespace fsspec
+}  // namespace fsspec

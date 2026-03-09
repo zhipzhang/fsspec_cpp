@@ -9,10 +9,10 @@ namespace fsspec {
 namespace python {
 
 namespace {
-    // 使用简单的 PyObject* 指针存储，避免 C++ 构造问题
-    thread_local PyObject* fsspec_mod = nullptr;
-    thread_local PyObject* fsspec_core_mod = nullptr;
-}
+// 使用简单的 PyObject* 指针存储，避免 C++ 构造问题
+thread_local PyObject* fsspec_mod = nullptr;
+thread_local PyObject* fsspec_core_mod = nullptr;
+}  // namespace
 
 nb::module_ fsspec_module() {
     nb::gil_scoped_acquire acquire;
@@ -43,5 +43,5 @@ void throw_python_error() {
     }
 }
 
-} // namespace python
-} // namespace fsspec
+}  // namespace python
+}  // namespace fsspec

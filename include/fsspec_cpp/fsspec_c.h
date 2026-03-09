@@ -84,12 +84,12 @@ bool fsspec_file_eof(fsspec_file_t* file);
 // ============ 文件信息 (stat) ============
 
 typedef struct {
-    char path[1024];      // 完整路径
-    char name[256];       // 文件名
-    int64_t size;         // 文件大小（字节）
-    bool is_dir;          // 是否是目录
-    double mtime;         // 修改时间（Unix时间戳，秒）
-    char protocol[64];    // 协议（file, s3, gcs等）
+    char path[1024];    // 完整路径
+    char name[256];     // 文件名
+    int64_t size;       // 文件大小（字节）
+    bool is_dir;        // 是否是目录
+    double mtime;       // 修改时间（Unix时间戳，秒）
+    char protocol[64];  // 协议（file, s3, gcs等）
 } fsspec_stat_t;
 
 // 获取文件/目录信息
@@ -130,4 +130,4 @@ FILE* fsspec_fopen(const char* url, const char* mode);
 }
 #endif
 
-#endif // FSSPEC_C_H
+#endif  // FSSPEC_C_H

@@ -96,12 +96,11 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
     target_link_libraries(test_simple PRIVATE fsspec_c ${Python_LIBRARIES})
     target_include_directories(test_simple PRIVATE ${Python_INCLUDE_DIRS})
     
-    # doctest C++ 测试
+    # doctest C++ 测试（使用纯 C 库避免 nanobind 静态初始化问题）
     add_executable(test_cpp_api tests/test_cpp_api.cpp)
-    target_link_libraries(test_cpp_api PRIVATE fsspec_cpp_core ${Python_LIBRARIES})
-    target_include_directories(test_cpp_api PRIVATE 
+    target_link_libraries(test_cpp_api PRIVATE fsspec_c ${Python_LIBRARIES})
+    target_include_directories(test_cpp_api PRIVATE
         ${CMAKE_SOURCE_DIR}/third_party
-        ${NANOBIND_INCLUDE_DIR}
         ${Python_INCLUDE_DIRS}
     )
     

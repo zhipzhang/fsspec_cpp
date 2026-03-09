@@ -36,14 +36,10 @@ static int cookie_close(void* cookie) {
 
 FILE* fsspec_file_to_fileptr(fsspec_file_t* file, const char* mode) {
     if (!file) return NULL;
-    
+
     cookie_io_functions_t funcs = {
-        .read = cookie_read,
-        .write = cookie_write,
-        .seek = cookie_seek,
-        .close = cookie_close
-    };
-    
+        .read = cookie_read, .write = cookie_write, .seek = cookie_seek, .close = cookie_close};
+
     // fopencookie: GNU 扩展
     FILE* fp = fopencookie(file, mode, funcs);
     if (!fp) {
@@ -57,13 +53,13 @@ FILE* fsspec_fopen(const char* url, const char* mode) {
         errno = EINVAL;
         return NULL;
     }
-    
+
     fsspec_file_t* file = fsspec_open(url, mode);
     if (!file) {
         errno = ENOENT;  // 或根据错误码映射
         return NULL;
     }
-    
+
     FILE* fp = fsspec_file_to_fileptr(file, mode ? mode : "r");
     if (!fp) {
         // fopencookie 失败，清理 fsspec_file
@@ -72,4 +68,4 @@ FILE* fsspec_fopen(const char* url, const char* mode) {
     return fp;
 }
 
-#endif // __linux__
+#endif  // __linux__

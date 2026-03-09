@@ -40,9 +40,7 @@ void fsspec_cleanup(void) {
     // 不清理 Python 解释器
 }
 
-const char* fsspec_last_error(void) {
-    return g_last_error[0] ? g_last_error : NULL;
-}
+const char* fsspec_last_error(void) { return g_last_error[0] ? g_last_error : NULL; }
 
 // ============ 内部辅助函数 ============
 
@@ -78,14 +76,14 @@ fsspec_fs_t* fsspec_fs_from_url(const char* url) {
         set_error("Failed to import fsspec.core");
         return NULL;
     }
-    
+
     PyObject* result = PyObject_CallMethod(core, "url_to_fs", "s", url);
     if (!result) {
         PyErr_Print();
         set_error("url_to_fs failed");
         return NULL;
     }
-    
+
     // result is (fs, path) tuple
     PyObject* fs = PyTuple_GetItem(result, 0);
     if (!fs) {
@@ -93,10 +91,10 @@ fsspec_fs_t* fsspec_fs_from_url(const char* url) {
         set_error("Invalid result from url_to_fs");
         return NULL;
     }
-    
+
     Py_INCREF(fs);
     Py_DECREF(result);
-    
+
     fsspec_fs_t* fsspec_fs = malloc(sizeof(fsspec_fs_t));
     fsspec_fs->py_fs = fs;
     return fsspec_fs;
@@ -147,22 +145,30 @@ int fsspec_fs_rename(fsspec_fs_t* fs, const char* src, const char* dst) {
 
 fsspec_file_t* fsspec_fs_open(fsspec_fs_t* fs, const char* path, fsspec_mode_t mode) {
     if (!fs) return NULL;
-    
+
     // 始终使用二进制模式
     const char* mode_str = "rb";
-    switch(mode) {
-        case FSSPEC_MODE_READ: mode_str = "rb"; break;
-        case FSSPEC_MODE_WRITE: mode_str = "wb"; break;
-        case FSSPEC_MODE_APPEND: mode_str = "ab"; break;
-        case FSSPEC_MODE_READWRITE: mode_str = "r+b"; break;
+    switch (mode) {
+        case FSSPEC_MODE_READ:
+            mode_str = "rb";
+            break;
+        case FSSPEC_MODE_WRITE:
+            mode_str = "wb";
+            break;
+        case FSSPEC_MODE_APPEND:
+            mode_str = "ab";
+            break;
+        case FSSPEC_MODE_READWRITE:
+            mode_str = "r+b";
+            break;
     }
-    
+
     PyObject* result = PyObject_CallMethod(fs->py_fs, "open", "ss", path, mode_str);
     if (!result) {
         PyErr_Print();
         return NULL;
     }
-    
+
     fsspec_file_t* file = malloc(sizeof(fsspec_file_t));
     file->py_file = result;
     file->closed = false;
@@ -173,22 +179,25 @@ fsspec_file_t* fsspec_open(const char* url, const char* mode) {
     // 解析模式，转换为二进制模式
     fsspec_mode_t fmode = FSSPEC_MODE_READ;
     if (mode) {
-        if (strchr(mode, 'w')) fmode = FSSPEC_MODE_WRITE;
-        else if (strchr(mode, 'a')) fmode = FSSPEC_MODE_APPEND;
-        else if (strchr(mode, '+')) fmode = FSSPEC_MODE_READWRITE;
+        if (strchr(mode, 'w'))
+            fmode = FSSPEC_MODE_WRITE;
+        else if (strchr(mode, 'a'))
+            fmode = FSSPEC_MODE_APPEND;
+        else if (strchr(mode, '+'))
+            fmode = FSSPEC_MODE_READWRITE;
     }
-    
+
     fsspec_fs_t* fs = fsspec_fs_from_url(url);
     if (!fs) {
         set_error("Failed to get filesystem from URL");
         return NULL;
     }
-    
+
     fsspec_file_t* file = fsspec_fs_open(fs, url, fmode);
-    
+
     // 注意：文件系统对象需要保持存活，但当前设计没有处理这个问题
     // 简化起见，保持 fs 存活（内存泄漏，但功能正确）
-    
+
     return file;
 }
 
@@ -205,22 +214,22 @@ int fsspec_file_close(fsspec_file_t* file) {
 
 size_t fsspec_file_read(fsspec_file_t* file, void* buffer, size_t size) {
     if (!file || file->closed) return 0;
-    
+
     PyObject* result = PyObject_CallMethod(file->py_file, "read", "n", (Py_ssize_t)size);
     if (!result) {
         PyErr_Print();
         return 0;
     }
-    
+
     Py_ssize_t len = 0;
     char* data = NULL;
-    
+
     // 二进制模式返回 bytes
     if (PyBytes_AsStringAndSize(result, &data, &len) != 0) {
         Py_DECREF(result);
         return 0;
     }
-    
+
     memcpy(buffer, data, len);
     Py_DECREF(result);
     return (size_t)len;
@@ -228,18 +237,18 @@ size_t fsspec_file_read(fsspec_file_t* file, void* buffer, size_t size) {
 
 size_t fsspec_file_write(fsspec_file_t* file, const void* buffer, size_t size) {
     if (!file || file->closed) return 0;
-    
+
     PyObject* bytes = PyBytes_FromStringAndSize((const char*)buffer, (Py_ssize_t)size);
     if (!bytes) return 0;
-    
+
     PyObject* result = PyObject_CallMethod(file->py_file, "write", "O", bytes);
     Py_DECREF(bytes);
-    
+
     if (!result) {
         PyErr_Print();
         return 0;
     }
-    
+
     size_t written = (size_t)PyLong_AsSize_t(result);
     Py_DECREF(result);
     return written;
@@ -247,13 +256,13 @@ size_t fsspec_file_write(fsspec_file_t* file, const void* buffer, size_t size) {
 
 int64_t fsspec_file_seek(fsspec_file_t* file, int64_t offset, int whence) {
     if (!file || file->closed) return -1;
-    
+
     PyObject* result = PyObject_CallMethod(file->py_file, "seek", "Li", (long long)offset, whence);
     if (!result) {
         PyErr_Print();
         return -1;
     }
-    
+
     int64_t pos = (int64_t)PyLong_AsLongLong(result);
     Py_DECREF(result);
     return pos;
@@ -261,13 +270,13 @@ int64_t fsspec_file_seek(fsspec_file_t* file, int64_t offset, int whence) {
 
 int64_t fsspec_file_tell(fsspec_file_t* file) {
     if (!file || file->closed) return -1;
-    
+
     PyObject* result = PyObject_CallMethod(file->py_file, "tell", NULL);
     if (!result) {
         PyErr_Print();
         return -1;
     }
-    
+
     int64_t pos = (int64_t)PyLong_AsLongLong(result);
     Py_DECREF(result);
     return pos;
@@ -280,7 +289,7 @@ int fsspec_file_flush(fsspec_file_t* file) {
 
 bool fsspec_file_eof(fsspec_file_t* file) {
     if (!file || file->closed) return true;
-    
+
     int64_t pos = fsspec_file_tell(file);
     char c;
     size_t n = fsspec_file_read(file, &c, 1);
@@ -293,32 +302,32 @@ bool fsspec_file_eof(fsspec_file_t* file) {
 
 int fsspec_fs_stat(fsspec_fs_t* fs, const char* path, fsspec_stat_t* st) {
     if (!fs || !st) return -1;
-    
+
     PyObject* result = PyObject_CallMethod(fs->py_fs, "info", "s", path);
     if (!result) {
         PyErr_Print();
         return -1;
     }
-    
+
     memset(st, 0, sizeof(*st));
-    
+
     PyObject* name = PyDict_GetItemString(result, "name");
     if (name && PyUnicode_Check(name)) {
         strncpy(st->path, PyUnicode_AsUTF8(name), sizeof(st->path) - 1);
         strncpy(st->name, PyUnicode_AsUTF8(name), sizeof(st->name) - 1);
     }
-    
+
     PyObject* size = PyDict_GetItemString(result, "size");
     if (size) st->size = (int64_t)PyLong_AsLongLong(size);
-    
+
     PyObject* type = PyDict_GetItemString(result, "type");
     if (type && PyUnicode_Check(type)) {
         st->is_dir = strcmp(PyUnicode_AsUTF8(type), "directory") == 0;
     }
-    
+
     PyObject* mtime = PyDict_GetItemString(result, "mtime");
     if (mtime) st->mtime = PyFloat_AsDouble(mtime);
-    
+
     Py_DECREF(result);
     return 0;
 }
@@ -337,7 +346,7 @@ int fsspec_stat(const char* url, fsspec_stat_t* st) {
 
 int fsspec_stat_to_posix(const fsspec_stat_t* fst, struct stat* st) {
     if (!fst || !st) return -1;
-    
+
     memset(st, 0, sizeof(*st));
     st->st_size = fst->size;
     st->st_mode = fst->is_dir ? (S_IFDIR | 0755) : (S_IFREG | 0644);
@@ -382,20 +391,14 @@ static int cookie_seek(void* cookie, off64_t* offset, int whence) {
     return 0;
 }
 
-static int cookie_close(void* cookie) {
-    return fsspec_file_close((fsspec_file_t*)cookie);
-}
+static int cookie_close(void* cookie) { return fsspec_file_close((fsspec_file_t*)cookie); }
 
 FILE* fsspec_file_to_fileptr(fsspec_file_t* file, const char* mode) {
     if (!file) return NULL;
-    
+
     cookie_io_functions_t funcs = {
-        .read = cookie_read,
-        .write = cookie_write,
-        .seek = cookie_seek,
-        .close = cookie_close
-    };
-    
+        .read = cookie_read, .write = cookie_write, .seek = cookie_seek, .close = cookie_close};
+
     return fopencookie(file, mode, funcs);
 }
 
@@ -404,13 +407,13 @@ FILE* fsspec_fopen(const char* url, const char* mode) {
         errno = EINVAL;
         return NULL;
     }
-    
+
     fsspec_file_t* file = fsspec_open(url, mode);
     if (!file) {
         errno = ENOENT;
         return NULL;
     }
-    
+
     FILE* fp = fsspec_file_to_fileptr(file, mode ? mode : "rb");
     if (!fp) {
         fsspec_file_close(file);

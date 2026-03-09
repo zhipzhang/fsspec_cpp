@@ -10,7 +10,7 @@ class PyFileSystem;
 class PyFile;
 
 // 辅助函数：从 dict 获取值，带默认值
-template<typename T>
+template <typename T>
 T dict_get(nb::dict d, const char* key, T default_val) {
     if (d.contains(key)) {
         return nb::cast<T>(d[key]);
@@ -20,14 +20,14 @@ T dict_get(nb::dict d, const char* key, T default_val) {
 
 // Python 文件系统包装
 class PyFileSystem : public FileSystem {
-private:
+   private:
     nb::object fs_obj_;
-    
-public:
+
+   public:
     explicit PyFileSystem(nb::object fs_obj) : fs_obj_(fs_obj) {}
-    
+
     nb::object py_object() const { return fs_obj_; }
-    
+
     std::unique_ptr<File> open(const std::string& path, OpenMode mode) override;
     bool exists(const std::string& path) override;
     void remove(const std::string& path) override;
@@ -41,13 +41,13 @@ public:
 
 // Python 文件包装
 class PyFile : public File {
-private:
+   private:
     nb::object file_obj_;
     bool closed_ = false;
-    
-public:
+
+   public:
     explicit PyFile(nb::object file_obj) : file_obj_(file_obj) {}
-    
+
     size_t read(void* buffer, size_t size) override {
         nb::gil_scoped_acquire acquire;
         auto data = file_obj_.attr("read")(size);
@@ -56,44 +56,50 @@ public:
         memcpy(buffer, bytes.data(), len);
         return len;
     }
-    
+
     size_t write(const void* buffer, size_t size) override {
         nb::gil_scoped_acquire acquire;
         nb::bytes data(static_cast<const char*>(buffer), size);
         auto result = file_obj_.attr("write")(data);
         return nb::cast<size_t>(result);
     }
-    
+
     void seek(int64_t pos, int whence) override {
         nb::gil_scoped_acquire acquire;
         file_obj_.attr("seek")(pos, whence);
     }
-    
+
     int64_t tell() override {
         nb::gil_scoped_acquire acquire;
         return nb::cast<int64_t>(file_obj_.attr("tell")());
     }
-    
+
     void close() override {
         nb::gil_scoped_acquire acquire;
         file_obj_.attr("close")();
         closed_ = true;
     }
-    
-    bool closed() const override {
-        return closed_;
-    }
+
+    bool closed() const override { return closed_; }
 };
 
 // PyFileSystem 实现
 std::unique_ptr<File> PyFileSystem::open(const std::string& path, OpenMode mode) {
     nb::gil_scoped_acquire acquire;
     std::string mode_str = "r";
-    switch(mode) {
-        case OpenMode::Read: mode_str = "r"; break;
-        case OpenMode::Write: mode_str = "w"; break;
-        case OpenMode::Append: mode_str = "a"; break;
-        case OpenMode::ReadWrite: mode_str = "r+"; break;
+    switch (mode) {
+        case OpenMode::Read:
+            mode_str = "r";
+            break;
+        case OpenMode::Write:
+            mode_str = "w";
+            break;
+        case OpenMode::Append:
+            mode_str = "a";
+            break;
+        case OpenMode::ReadWrite:
+            mode_str = "r+";
+            break;
     }
     auto f = fs_obj_.attr("open")(path, mode_str);
     return std::make_unique<PyFile>(f);
@@ -202,4 +208,4 @@ std::vector<FileInfo> ls(const std::string& url) {
     return fs->ls(url);
 }
 
-} // namespace fsspec
+}  // namespace fsspec
