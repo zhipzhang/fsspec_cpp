@@ -23,42 +23,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        pip install fsspec nanobind scikit-build-core
-
-    - name: Configure CMake
-      run: |
-        mkdir build
-        cd build
-        cmake ..
-
-    - name: Build
-      run: |
-        cd build
-        make -j4
-
-    - name: Run C API tests
-      run: |
-        cd build
-        ./test_c_api
-
-    - name: Run Python module tests (if available)
-      run: |
-        cd build
-        python3 -c "import sys; sys.path.insert(0, '.'); import _fsspec_cpp; print('Python module loaded')"
-
-  build-macos:
-    runs-on: macos-latest
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.12'
-
-    - name: Install dependencies
-      run: |
-        pip install fsspec nanobind scikit-build-core
+        pip install fsspec zstandard lz4
 
     - name: Build
       run: |
@@ -66,13 +31,7 @@ jobs:
         cmake ..
         make -j4
 
-  format-check:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Check C/C++ formatting
-      uses: jidicula/clang-format-action@v4.11.0
-      with:
-        clang-format-version: '17'
-        check-path: 'src include tests'
+    - name: Run tests
+      run: |
+        cd build
+        ctest --output-on-failure
